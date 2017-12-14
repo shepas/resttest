@@ -10,8 +10,10 @@ class Server(Base):
     modifyDatetime = Column(DateTime(timezone=True), default=func.now())
     expirationDate = Column(DateTime(timezone=True))
     status_id = Column(Integer, ForeignKey('rbStatus.id'))
+    rack_id = Column(Integer, ForeignKey('Rack.id'))
 
     status = relationship('RbStatus', foreign_keys=[status_id])
+    rack = relationship('Rack', foreign_keys=[rack_id])
 
 class Rack(Base):
     ''' Модель стоек '''
