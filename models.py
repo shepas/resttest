@@ -15,6 +15,19 @@ class Server(Base):
     status = relationship('RbStatus', foreign_keys=[status_id])
     rack = relationship('Rack', foreign_keys=[rack_id])
 
+    def getStatus(self):
+        return RbStatus.query.filter(RbStatus.id == self.status_id).first().value if self.status_id else 'Without status'
+
+
+    def serialize(self):
+        return {'id': self.id,
+                'createDate': self.createDatetime,
+                'modifyDate': self.modifyDatetime,
+                'expirationDate': self.expirationDate if self.expirationDate else 'None',
+                'status': self.getStatus(),
+                'rack': self.rack_id if self.rack_id else 'Not in rack',
+                }
+
 class Rack(Base):
     ''' Модель стоек '''
     __tablename__ = 'Rack'
@@ -24,6 +37,23 @@ class Rack(Base):
     size_id = Column(Integer, ForeignKey('rbSize.id'))
 
     size = relationship('RbSize', foreign_keys=[size_id])
+
+    def __init__(self, size_id):
+        self.size_id = size_id
+
+    def getBuzySlots(self):
+        return Server.query.filter(Server.rack_id == self.id).count()
+
+    def getSize(self):
+        return RbSize.query.filter(RbSize.id == self.size_id).first().value
+
+    def serialize(self):
+        return {'id': self.id,
+                'createDate': self.createDatetime,
+                'modifyDate': self.modifyDatetime,
+                'size': self.getSize(),
+                'buzySlots': self.getBuzySlots(),
+                }
 
 class RbStatus(Base):
     ''' Модель справочника статусов '''
