@@ -1,6 +1,8 @@
 from flask import Flask, request, jsonify
+from sqlalchemy import func
+
 from database import db_session
-from models import Server, RbSize, Rack
+from models import Server, RbSize, Rack, RbStatus
 
 app = Flask(__name__)
 
@@ -149,24 +151,120 @@ def deleteRack(id):
 def addServerToRack():
     '''
     Добавление сервера в стойку
+    :param server_id: id of server
+    :param rack_id: id of rack
     :return:
     '''
-    pass
+
+    if not request.json or not request.json['server_id'] or not request.json['rack_id']:
+        return jsonify({'message': 'Error: not enough arguments'})
+
+    server_id = request.json['server_id']
+    rack_id = request.json['rack_id']
+    server = Server.query.filter(Server.id == server_id).first()
+    rack = Rack.query.filter(Rack.id == rack_id).first()
+
+    if not server:
+        return jsonify({'message': 'Error: server with id %s not found' % server_id})
+    elif not rack:
+        return jsonify({'message': 'Error: rack with id %s not found' % rack_id})
+    elif not server.getStatus() in ['Unpaid', 'Deleted', 'Without status']:
+        return jsonify({'message': 'Error: cannot use server in status %s' % server.getStatus()})
+    elif server.rack_id:
+        return jsonify({'message': 'Error: server already in rack with id %s' % server.rack_id})
+    elif rack.getSize() == rack.getBuzySlots():
+        return jsonify({'message': 'Error: rack is full'})
+
+    try:
+        server.status_id = RbStatus.query.filter(RbStatus.value == 'Unpaid').first().id
+        server.rack_id = rack.id
+        server.modifyDatetime = func.now()
+        rack.modifyDatetime = func.now()
+        db_session.commit()
+        return jsonify({'message': 'Server added to rack'})
+    except:
+        return jsonify({'message': 'Error adding server to rack'})
+
 
 @app.route('/serveroperations', methods=['PUT'])
 def changeServerStatus():
     '''
     Смена статуса сервера
+    :param server_id: id of server
+    :param status: value RbStatus
+    :param expDate: expiration Date
     :return:
     '''
-    pass
+    if not request.json or not request.json['server_id'] or not request.json['status']:
+        return jsonify({'message': 'Error: not enough arguments'})
 
-@app.route('/serveroperations', methods=['DELETE'])
-def deleteServerFromRack():
+    server_id = request.json['server_id']
+    status = request.json['status']
+    server = Server.query.filter(Server.id == server_id).first()
+    status_id = RbStatus.query.filter(RbStatus.value == status).first()
+
+    if not server:
+        return jsonify({'message': 'Error: server with id %s not found' % server_id})
+    elif not status_id:
+        return jsonify({'messsage': 'Error: status with value %s not found' % status})
+    elif server.getStatus() == 'Deleted':
+        return jsonify({'message': 'Error: server in status "Deleted"'})
+    elif not server.rack_id:
+        return jsonify({'message': 'Error: server not in rack'})
+    elif server == 'Paid' and not request.json['expDate']:
+        return jsonify({'message': 'For this status need expirationDate'})
+    elif not server.getStatus() == 'Unpaid':
+        return jsonify({'message': 'Error: cannot change to this status from %s' % server.getStatus()})
+
+    if server.getStatus() == 'Unpaid':
+        server.status_id = status_id
+        server.expirationDate = request.json['expDate']
+        server.modifyDatetime = func.now()
+        db_session.commit()
+        return jsonify({'message': 'Status change to "Paid"'})
+    elif status == 'Deleted':
+        server.status_id = status_id
+        server.expirationDate = None
+        server.modifyDatetime = func.now()
+        db_session.commit()
+        return jsonify({'message': 'Status change to "Deleted"'})
+
+
+@app.route('/serveroperations/<int:id>', methods=['DELETE'])
+def deleteServerFromRack(id):
     '''
     Удаление сервера из стойки
+    :param: id of server
     :return:
     '''
+
+    server = Server.query.filter(Server.id == id).first()
+    if not server:
+        return jsonify({'message': 'Error: server with id %s not found' % id})
+    elif not server.getStatus() in ['Unpaid', 'Deleted', 'Without status']:
+        return jsonify({'message': 'Error: cannot use server in status %s' % server.getStatus()})
+
+    try:
+        server.rack_id = None
+        db_session.commit()
+        return jsonify({'message': 'Server deleted from rack'})
+    except:
+        return jsonify({'message': 'Error deleting server from rack'})
+
+
+@app.route('/refbooks', methods=['GET'])
+def getRefBooks():
+    '''
+    Справочники
+    :return:
+    '''
+
+    result = {'sizes': [], 'statuses': []}
+    for size in RbSize.query.all():
+        result['sizes'].append(size.serialize())
+    for status in RbStatus.query.all():
+        result['statuses'].append(status.serialize())
+    return result
 
 if __name__ == '__main__':
     app.run(debug=True, port=8080)

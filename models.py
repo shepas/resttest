@@ -64,6 +64,9 @@ class RbStatus(Base):
     def __init__(self, value=None):
         self.value = value
 
+    def serialize(self):
+        return {'id': self.id, 'value': self.value}
+
 class RbSize(Base):
     ''' Модель справочника размеров '''
     __tablename__ = 'rbSize'
@@ -72,3 +75,6 @@ class RbSize(Base):
 
     def __init__(self, value=None):
         self.value = value
+
+    def serialize(self):
+        return {'id': self.id, 'value': self.value}
