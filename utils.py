@@ -1,6 +1,5 @@
 from datetime import datetime
 from flask import jsonify
-from database import db_session
 
 def getMessage(message):
     return jsonify({'message': message})

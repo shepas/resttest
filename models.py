@@ -1,10 +1,11 @@
-import asyncio
 import random
 
 import time
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, func
 from sqlalchemy.orm import relationship
 from database import Base, db_session
+import celery
+
 
 class Server(Base):
     ''' Модель сервера '''
@@ -21,12 +22,6 @@ class Server(Base):
 
     def getStatus(self):
         return RbStatus.query.filter(RbStatus.id == self.status_id).first().value if self.status_id else 'Without status'
-
-    def activateServer(self):
-        time.sleep(random.randint(10, 20))
-        self.status_id = RbStatus.query.filter(RbStatus.value == 'Active').first().id
-        db_session.commit()
-        return
 
 
     def serialize(self):

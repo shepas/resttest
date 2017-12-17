@@ -1,5 +1,8 @@
-from threading import Thread
+import random
+import time
+from datetime import timedelta, datetime
 
+from celery import Celery
 from flask import Flask, request, jsonify
 from sqlalchemy import func
 
@@ -8,9 +11,21 @@ from models import Server, RbSize, Rack, RbStatus
 from utils import getMessage, forceDateTime
 
 app = Flask(__name__)
+flask_app = Flask(__name__)
+app.config['CELERY_BROKER_URL'] = 'redis://localhost:6379/0'
+app.config['CELERY_RESULT_BACKEND'] = 'redis://localhost:6379/0'
+celery = Celery(app.name, broker=app.config['CELERY_BROKER_URL'])
+celery.conf.update(app.config)
+celery.conf.update(CELERYBEAT_SCHEDULE={
+    'add-every-60-seconds': {
+        'task': 'checkServers',
+        'schedule': timedelta(seconds=60)
+    },
+})
 
 @app.teardown_appcontext
 def shutdown_session(exception=None):
+    db_session.expunge_all()
     db_session.remove()
 
 @app.route('/', methods=['GET'])
@@ -19,7 +34,16 @@ def getFullList():
     Список стоек и серверов в них
     :return:
     '''
-    pass
+
+    result = {'racks': []}
+    for rack in Rack.query.all():
+        serRack = rack.serialize()
+        serRack['servers'] = []
+        for server in Server.query.filter(Server.rack_id == rack.id):
+            serRack['servers'].append(server.serialize())
+        result['racks'].append(serRack)
+    return jsonify(result)
+
 
 @app.route('/server', methods=['GET'])
 def getServers():
@@ -223,8 +247,7 @@ def changeServerStatus():
         server.expirationDate = forceDateTime(request.json['expDate'])
         server.modifyDatetime = func.now()
         db_session.commit()
-        t = Thread(target=server.activateServer, args=())
-        t.start()
+        activateServer.delay(server.id)
         return getMessage('Status change to "Paid"')
     elif status == 'Deleted':
         server.status_id = status_id
@@ -269,6 +292,21 @@ def getRefBooks():
     for status in RbStatus.query.all():
         result['statuses'].append(status.serialize())
     return result
+
+@celery.task(name='activate_server')
+def activateServer(srv_id):
+    time.sleep(random.randint(10, 20))
+    srv = db_session.query(Server).filter(Server.id == srv_id).first()
+    srv.status_id = RbStatus.query.filter(RbStatus.value == 'Active').first().id
+    db_session.commit()
+
+@celery.task(name='checkServers')
+def checkServers():
+    for server in Server.query.all():
+        if server.getStatus() == 'Active' and server.expirationDate < datetime.now():
+            server.status_id = RbStatus.query.filter(RbStatus.value == 'Unpaid').first().id
+            server.expirationDate = None
+            db_session.commit()
 
 if __name__ == '__main__':
     app.run(debug=True, port=8080)
