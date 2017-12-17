@@ -1,10 +1,6 @@
-import random
-
-import time
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, func
 from sqlalchemy.orm import relationship
-from database import Base, db_session
-import celery
+from database import Base
 
 
 class Server(Base):

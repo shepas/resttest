@@ -66,7 +66,7 @@ def getServerById(id):
     :return:
     '''
 
-    server = Server.query.filter(Server.id == id)
+    server = Server.query.filter(Server.id == id).first()
     if server:
         return jsonify(server.serialize())
     else:
@@ -143,10 +143,10 @@ def addRack():
     if not request.json or not request.json['size']:
         return jsonify({'message': 'Error: need size'})
 
-    size_id = RbSize.query.filter(RbSize.value == request.json['size']).first().id
-    if size_id:
+    size = RbSize.query.filter(RbSize.value == request.json['size']).first()
+    if size:
         try:
-            db_session.add(Rack(size_id))
+            db_session.add(Rack(size.id))
             db_session.commit()
             return getMessage('Rack created.')
         except:
